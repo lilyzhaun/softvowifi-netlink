@@ -1,5 +1,10 @@
 # netlink 本地副本来源与补丁
 
+> 当前状态（2026-10-10）：本仓已为PUBLIC，是保留原module路径的独立维护快照，
+> 不是GitHub上游fork network。下文日期化私有迁移/待邀请说明只作历史；当前安装、
+> 测试与协作见[README](README.md)。本轮仅公开文档/GitHub维护，不修改原许可证、
+> 生产代码、固定版本或尚未核定的来源/义务。
+
 ## 来源
 
 - 上游仓库：`github.com/iniwex5/netlink`
