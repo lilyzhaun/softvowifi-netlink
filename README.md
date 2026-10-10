@@ -1,97 +1,118 @@
-> **Private maintenance repository (Issue 35, checked 2026-09-15)**: [lilyzhaun/softvowifi-netlink](https://github.com/lilyzhaun/softvowifi-netlink) exists and is PRIVATE. `lilyzhaun` owns the repository and final integration; `newdamm` contributes reviewed maintenance PRs. The write invitation is **PENDINGINVITATION** at this check, not confirmed access; only `newdamm` can accept it. No admin permission was granted.
-> Module path remains `github.com/iniwex5/netlink`. SoftVoWiFi's verified migration candidate consumes pinned commit `be8893d918930ed1f6c790c41e51c13c20b20cf9` (`v0.0.0-20260915075719-be8893d91893`), not the latest maintenance `main` HEAD. This documentation-only update advances `main` without changing that pin, production code, module files or licenses; the main-repository migration still awaits final acceptance.
-> The initial snapshot was imported from SoftVoWiFi commit `8ca6114de2c915473165bf0698a09ced0f9108e3`, path `engine/third_party/netlink`. [PROVENANCE.md](PROVENANCE.md), the original README below (including historical commands), [LICENSE](LICENSE) and [Go BSD license](LICENSES/Go-BSD-3-Clause.txt) are preserved. Unknown provenance and licensing limits remain unresolved; PRIVATE is not legal or public-release clearance. This is a private snapshot import, not a GitHub fork-network claim.
-> Canonical policy: `engine/third_party/manifest.json` in SoftVoWiFi; handoff: `docs/第三方Go依赖维护与导出.md`. Initial-import notes, upstream badges and examples below are historical, not current integration instructions or device validation. Future code changes require review and a separately verified pin update.
+# softvowifi-netlink
 
-# netlink - netlink library for go #
+[![CI](https://github.com/lilyzhaun/softvowifi-netlink/actions/workflows/ci.yml/badge.svg)](https://github.com/lilyzhaun/softvowifi-netlink/actions/workflows/ci.yml)
 
-![Build Status](https://github.com/vishvananda/netlink/actions/workflows/main.yml/badge.svg) [![GoDoc](https://godoc.org/github.com/vishvananda/netlink?status.svg)](https://godoc.org/github.com/vishvananda/netlink)
+**English** · [简体中文](README.zh-CN.md)
 
-The netlink package provides a simple netlink library for go. Netlink
-is the interface a user-space program in linux uses to communicate with
-the kernel. It can be used to add and remove interfaces, set ip addresses
-and routes, and configure ipsec. Netlink communication requires elevated
-privileges, so in most cases this code needs to be run as root. Since
-low-level netlink messages are inscrutable at best, the library attempts
-to provide an api that is loosely modeled on the CLI provided by iproute2.
-Actions like `ip link add` will be accomplished via a similarly named
-function like AddLink(). This library began its life as a fork of the
-netlink functionality in
-[docker/libcontainer](https://github.com/docker/libcontainer) but was
-heavily rewritten to improve testability, performance, and to add new
-functionality like ipsec xfrm handling.
+A public, maintained Linux netlink snapshot used by SoftVoWiFi. It exposes the
+retained link, address, route, rule and XFRM APIs under the original module path
+`github.com/iniwex5/netlink`.
 
-## Local Build and Test ##
+This is an independent maintained snapshot, **not an official upstream release
+or a complete mirror**. It is not part of GitHub's upstream fork network.
 
-You can use go get command:
+## What is maintained here?
 
-    go get github.com/vishvananda/netlink
+- Production netlink and `nl` sources retained from `iniwex5/netlink v1.3.3`.
+- An XFRM policy decoder fix that uses the kernel selector's family, rather than
+  `FAMILY_ALL`, when decoding wildcard selectors. In particular, `::/0` must not
+  turn into `0.0.0.0/0`.
+- Focused, synthetic decoder regressions. The complete upstream test suite and
+  examples were not imported; passing this repository's CI is not full upstream
+  or kernel compatibility certification.
 
-Testing dependencies:
+The code remains the authority for the retained API. Background, source pointers
+and licensing qualifications are in [PROVENANCE.md](PROVENANCE.md).
 
-    go get github.com/vishvananda/netns
+## Requirements
 
-Testing (requires root):
+- Linux for kernel-facing operations; usable APIs depend on the host kernel and
+  network namespace.
+- `go.mod` declares Go 1.23. CI uses Go 1.26 on Linux.
+- Network mutations normally require `CAP_NET_ADMIN`. Some read-only operations
+  can run without it, subject to namespace, seccomp and platform policy.
 
-    sudo -E go test github.com/vishvananda/netlink
+Do not run network-mutating code in your host namespace just to try an example.
+Use a disposable, isolated environment for privileged integration tests.
 
-## Examples ##
+## Use the maintained snapshot
 
-Add a new bridge and add eth1 into it:
+The repository URL and module path deliberately differ. In an existing Go module:
+
+```sh
+go mod edit -replace=github.com/iniwex5/netlink=github.com/lilyzhaun/softvowifi-netlink@v0.0.0-20260915075719-be8893d91893
+go get github.com/iniwex5/netlink@v1.3.3
+go list -m -json github.com/iniwex5/netlink
+```
+
+The example pins a reproducible maintained code revision. It does not follow
+`main` automatically. Keep importing `github.com/iniwex5/netlink`, and inspect
+the `Replace` entry from `go list` to confirm what your build actually consumes.
+Do not confuse the upstream `v1.3.3` requirement with an unmodified upstream tree.
+
+## Read-only example
+
+This lists interfaces in the process's current network namespace; it does not
+create links, change addresses or install routes or IPsec state.
 
 ```go
 package main
 
 import (
-    "fmt"
-    "github.com/vishvananda/netlink"
+	"fmt"
+	"log"
+
+	"github.com/iniwex5/netlink"
 )
 
 func main() {
-    la := netlink.NewLinkAttrs()
-    la.Name = "foo"
-    mybridge := &netlink.Bridge{LinkAttrs: la}
-    err := netlink.LinkAdd(mybridge)
-    if err != nil  {
-        fmt.Printf("could not add %s: %v\n", la.Name, err)
-    }
-    eth1, _ := netlink.LinkByName("eth1")
-    netlink.LinkSetMaster(eth1, mybridge)
+	links, err := netlink.LinkList()
+	if err != nil {
+		log.Fatal(err)
+	}
+	for _, link := range links {
+		fmt.Printf("%d: %s\n", link.Attrs().Index, link.Attrs().Name)
+	}
 }
-
-```
-Note `NewLinkAttrs` constructor, it sets default values in structure. For now
-it sets only `TxQLen` to `-1`, so kernel will set default by itself. If you're
-using simple initialization(`LinkAttrs{Name: "foo"}`) `TxQLen` will be set to
-`0` unless you specify it like `LinkAttrs{Name: "foo", TxQLen: 1000}`.
-
-Add a new ip address to loopback:
-
-```go
-package main
-
-import (
-    "github.com/vishvananda/netlink"
-)
-
-func main() {
-    lo, _ := netlink.LinkByName("lo")
-    addr, _ := netlink.ParseAddr("169.254.169.254/32")
-    netlink.AddrAdd(lo, addr)
-}
-
 ```
 
-## Future Work ##
+## Develop and test
 
-Many pieces of netlink are not yet fully supported in the high-level
-interface. Aspects of virtually all of the high-level objects don't exist.
-Many of the underlying primitives are there, so its a matter of putting
-the right fields into the high-level objects and making sure that they
-are serialized and deserialized correctly in the Add and List methods.
+```sh
+git clone https://github.com/lilyzhaun/softvowifi-netlink.git
+cd softvowifi-netlink
+go test -p 1 -race -shuffle=on -count=1 -timeout=120s ./...
+go vet -p 1 -composites=false ./...
+```
 
-There are also a few pieces of low level netlink functionality that still
-need to be implemented. Routing rules are not in place and some of the
-more advanced link types. Hopefully there is decent structure and testing
-in place to make these fairly straightforward to add.
+The retained decoder tests use constructed netlink messages, not host network
+mutations. CI does not run as root or exercise real kernel XFRM interoperability.
+Full `go vet` currently reports an existing unkeyed `nl.IfaCacheInfo` literal in
+`addr_linux.go`. CI disables the **whole composites analyzer**, not just that
+literal; the other default analyzers still run. Legacy formatting differences
+are reported without rewriting retained source. These are explicit limitations,
+not a claim that full vet or a full formatting check passed.
+The [contribution guide](CONTRIBUTING.md) explains the review and test boundaries.
 
+## Support and security
+
+- [Bug reports and feature requests](https://github.com/lilyzhaun/softvowifi-netlink/issues/new/choose)
+- [Security policy and private reporting](SECURITY.md)
+- [Code of conduct](CODE_OF_CONDUCT.md)
+
+Use synthetic reproductions. Never attach real XFRM keys, credentials, private
+configuration or unsanitized packet captures to a public issue.
+
+## License and provenance
+
+The original [Apache-2.0 LICENSE](LICENSE) and its copyright notices are retained.
+The Go-derived alignment helper has an additional
+[BSD-3-Clause notice](LICENSES/Go-BSD-3-Clause.txt).
+
+See [PROVENANCE.md](PROVENANCE.md), including its unresolved copied-source and
+ipset obligation notes. The repository's root license is not a blanket statement
+that every historical attribution question has been resolved. No original
+license text or copyright has been replaced by this documentation refresh.
+
+The [earlier README](docs/README-imported.md) is archived for source context;
+its old installation commands and upstream badges are not current guidance.

@@ -1,0 +1,25 @@
+name: Feature request / 功能建议
+description: Explain the use case and expected API without private data.
+title: "[Feature]: "
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Use case and current limitation
+      description: Explain the problem; distinguish an API request from a device or carrier restriction.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior and alternatives
+      description: Include compatibility, platform and testing considerations.
+    validations:
+      required: true
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy
+      options:
+        - label: This request contains no credentials, subscriber data, complete configuration or raw captures.
+          required: true

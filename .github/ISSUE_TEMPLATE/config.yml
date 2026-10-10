@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Private vulnerability report / 私密漏洞报告
+    url: https://github.com/lilyzhaun/softvowifi-netlink/security/advisories/new
+    about: Do not disclose vulnerabilities or sensitive material in a public issue.
+  - name: Documentation / 使用说明
+    url: https://github.com/lilyzhaun/softvowifi-netlink#readme
+    about: Check module replacement, platform requirements and known limitations first.
