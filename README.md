@@ -17,6 +17,9 @@ or a complete mirror**. It is not part of GitHub's upstream fork network.
 - An XFRM policy decoder fix that uses the kernel selector's family, rather than
   `FAMILY_ALL`, when decoding wildcard selectors. In particular, `::/0` must not
   turn into `0.0.0.0/0`.
+- [ESN and extended replay state readback](docs/esn-state-readback.md), including
+  the actual flag, sequence words and independently owned bitmap. Readback does
+  not restore or rewrite live replay counters.
 - Focused, synthetic decoder regressions. The complete upstream test suite and
   examples were not imported; passing this repository's CI is not full upstream
   or kernel compatibility certification.
@@ -85,8 +88,10 @@ go test -p 1 -race -shuffle=on -count=1 -timeout=120s ./...
 go vet -p 1 -composites=false ./...
 ```
 
-The retained decoder tests use constructed netlink messages, not host network
-mutations. CI does not run as root or exercise real kernel XFRM interoperability.
+Default decoder tests use constructed netlink messages, not host network
+mutations. An explicitly opted-in integration test requires a fresh isolated
+network namespace; see the ESN readback guide. CI does not run as root or
+exercise real kernel XFRM interoperability.
 Full `go vet` currently reports an existing unkeyed `nl.IfaCacheInfo` literal in
 `addr_linux.go`. CI disables the **whole composites analyzer**, not just that
 literal; the other default analyzers still run. Legacy formatting differences

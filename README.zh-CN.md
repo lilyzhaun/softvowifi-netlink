@@ -11,6 +11,8 @@
 - 保留iniwex5/netlink v1.3.3的netlink与`nl`生产源码。
 - 修复XFRM通配selector的地址族解码：按内核返回的`msg.Sel.Family`处理，
   不让IPv6 `::/0`在`FAMILY_ALL`查询中变成IPv4 `0.0.0.0/0`。
+- [ESN及扩展重放状态读回](docs/esn-state-readback.md)：真实标志、高低序号和独立位图；
+  只读结果不用于恢复或重写运行中的重放计数。
 - 保留聚焦的合成解码回归；没有完整上游测试或通用内核兼容保证。
 
 ## 使用
