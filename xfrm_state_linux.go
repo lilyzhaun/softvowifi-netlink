@@ -94,6 +94,18 @@ type XfrmReplayState struct {
 	BitMap uint32
 }
 
+// XfrmReplayStateESN is the extended replay context returned by the kernel.
+// High sequence words and bitmap are observations, not state restoration input.
+// A non-ESN SA can also use this context for an extended replay window.
+type XfrmReplayStateESN struct {
+	OSeq         uint32
+	Seq          uint32
+	OSeqHi       uint32
+	SeqHi        uint32
+	ReplayWindow uint32
+	BitMap       []uint32
+}
+
 func (r XfrmReplayState) String() string {
 	return fmt.Sprintf("{OSeq: 0x%x, Seq: 0x%x, BitMap: 0x%x}",
 		r.OSeq, r.Seq, r.BitMap)
@@ -124,6 +136,7 @@ type XfrmState struct {
 	DontEncapDSCP bool
 	OSeqMayWrap   bool
 	Replay        *XfrmReplayState
+	ReplayESN     *XfrmReplayStateESN // Readback only; Add/Update do not restore these counters.
 	Selector      *XfrmPolicy
 	AFUnspec      bool // XFRM_STATE_AF_UNSPEC: allow tunnel mode SA to handle traffic of any address family
 }
@@ -221,6 +234,30 @@ func writeReplayEsn(replayWindow int) []byte {
 	replayEsn.BmpLen = uint32((replayWindow + (bytesPerElem * 8) - 1) / (bytesPerElem * 8))
 
 	return replayEsn.Serialize()
+}
+
+func parseReplayESN(data []byte) (*XfrmReplayStateESN, error) {
+	const headerSize = nl.SizeofXfrmReplayStateEsn
+	if len(data) < headerSize || (len(data)-headerSize)%4 != 0 {
+		return nil, errors.New("invalid XFRM replay ESN attribute length")
+	}
+	bitmapWords := native.Uint32(data[0:4])
+	if uint64(bitmapWords) != uint64((len(data)-headerSize)/4) {
+		return nil, errors.New("invalid XFRM replay ESN bitmap length")
+	}
+	window := native.Uint32(data[20:24])
+	if uint64(window) > uint64(bitmapWords)*32 {
+		return nil, errors.New("invalid XFRM replay ESN window")
+	}
+	replay := &XfrmReplayStateESN{
+		OSeq: native.Uint32(data[4:8]), Seq: native.Uint32(data[8:12]),
+		OSeqHi: native.Uint32(data[12:16]), SeqHi: native.Uint32(data[16:20]),
+		ReplayWindow: window, BitMap: make([]uint32, int(bitmapWords)),
+	}
+	for i := range replay.BitMap {
+		replay.BitMap[i] = native.Uint32(data[headerSize+i*4 : headerSize+(i+1)*4])
+	}
+	return replay, nil
 }
 
 func writeReplay(r *XfrmReplayState) []byte {
@@ -516,6 +553,7 @@ func xfrmStateFromXfrmUsersaInfo(msg *nl.XfrmUsersaInfo) *XfrmState {
 	state.Spi = int(nl.Swap32(msg.Id.Spi))
 	state.Reqid = int(msg.Reqid)
 	state.ReplayWindow = int(msg.ReplayWindow)
+	state.ESN = msg.Flags&nl.XFRM_STATE_ESN != 0
 	lftToLimits(&msg.Lft, &state.Limits)
 	curToStats(&msg.Curlft, &msg.Stats, &state.Statistics)
 	state.Selector = &XfrmPolicy{
@@ -620,6 +658,15 @@ func parseXfrmState(m []byte, family int) (*XfrmState, error) {
 			state.Replay.OSeq = replay.OSeq
 			state.Replay.Seq = replay.Seq
 			state.Replay.BitMap = replay.BitMap
+		case nl.XFRMA_REPLAY_ESN_VAL:
+			if state.ReplayESN != nil {
+				return nil, errors.New("duplicate XFRM replay ESN attribute")
+			}
+			state.ReplayESN, err = parseReplayESN(attr.Value)
+			if err != nil {
+				return nil, err
+			}
+			state.ReplayWindow = int(state.ReplayESN.ReplayWindow)
 		}
 	}
 
